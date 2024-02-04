@@ -16,6 +16,10 @@ pacman::p_load(
       , RColorBrewer
       , lubridate
       , AmesHousing
+      , boot
+      , dplyr
+      ,caret
+      , FNN
       )
 ```
 
@@ -64,14 +68,23 @@ ames_raw_2009=ames_raw[ames_raw$`Yr Sold`>=2008,]
 Your code:
 
 ```{r,echo=TRUE}
-#
-#
+fit_inclass <- glm(SalePrice ~ `Gr Liv Area`, data=ames_raw_2008, family=gaussian)
+summary(fit_inclass)
+
+boot_fn <- function(data, index) {
+  fit <- glm(SalePrice ~ `Gr Liv Area`, data=ames_raw_2008, subset=index, family=gaussian)
+  return(coef(fit))
+}
+
+set.seed(1) 
+boot_results <- boot(data=ames_raw_2008, statistic=boot_fn, R=1000)
+boot_results
 ```
 
 Your answer:
 
 ~~~
-Please write your answer in full sentences.
+The model is above
 
 
 ~~~
@@ -82,14 +95,27 @@ Please write your answer in full sentences.
 Your code:
 
 ```{r,echo=TRUE}
-#
-#
+model1 <- glm(SalePrice ~ `Gr Liv Area`, data=ames_raw_2008, family=gaussian)
+cv1 <- cv.glm(ames_raw_2008, model1, K=10)
+
+
+model2 <- glm(SalePrice ~ `Gr Liv Area` + `Overall Qual`, data=ames_raw_2008, family=gaussian)
+cv2 <- cv.glm(ames_raw_2008, model2, K=10) 
+
+
+cv1$delta[1]
+cv2$delta[1]
+
+predictions <- predict(model2, newdata=ames_raw_2009)
+
+mse <- mean((ames_raw_2009$SalePrice - predictions)^2)
+print(mse)
 ```
 
 Your answer:
 
 ~~~
-Please write your answer in full sentences.
+It looks like the model has some problem. I have no idea how to fix. Help
 
 
 ~~~
@@ -100,14 +126,26 @@ Please write your answer in full sentences.
 Your code:
 
 ```{r,echo=TRUE}
-#
-#
+trainControl <- trainControl(method = "cv", number = 10)
+
+set.seed(1)
+knnFit <- train(SalePrice ~ `Gr Liv Area`, data = ames_raw_2008, method = "knn", tuneLength = 20, trControl = trainControl)
+print(knnFit)
+
+bestK <- knnFit$bestTune$k
+
+predictions <- knn.reg(train = ames_raw_2008[, c("Gr Liv Area")], test = ames_raw_2009[, c("Gr Liv Area")], y = ames_raw_2008$SalePrice, k = bestK)$pred
+
+
+mse <- mean((ames_raw_2009$SalePrice - predictions)^2)
+print(mse)
+
 ```
 
 Your answer:
 
 ~~~
-Please write your answer in full sentences.
+Why the value is big, I don't understand
 
 
 ~~~
@@ -118,14 +156,33 @@ Please write your answer in full sentences.
 Your code:
 
 ```{r,echo=TRUE}
-#
-#
+lm_fit <- lm(SalePrice ~ `Gr Liv Area`, data = ames_raw_2008)
+
+knn_fit <- knn.reg(train = ames_raw_2008[,"Gr Liv Area", drop = FALSE], test = ames_raw_2008[,"Gr Liv Area", drop = FALSE], y = ames_raw_2008$SalePrice, k = 5)
+
+lm_preds_train <- predict(lm_fit, newdata = ames_raw_2008)
+lm_mse_train <- mean((ames_raw_2008$SalePrice - lm_preds_train)^2)
+
+knn_mse_train <- mean((ames_raw_2008$SalePrice - knn_fit$pred)^2)
+
+lm_preds_test <- predict(lm_fit, newdata = ames_raw_2009)
+lm_mse_test <- mean((ames_raw_2009$SalePrice - lm_preds_test)^2)
+
+knn_preds_test <- knn.reg(train = ames_raw_2008[,"Gr Liv Area", drop = FALSE], test = ames_raw_2009[,"Gr Liv Area", drop = FALSE], y = ames_raw_2008$SalePrice, k = 5)$pred
+knn_mse_test <- mean((ames_raw_2009$SalePrice - knn_preds_test)^2)
+
+cat("Linear Regression MSE on Training Data:", lm_mse_train, "\n")
+cat("KNN Regression MSE on Training Data:", knn_mse_train, "\n")
+cat("Linear Regression MSE on Test Data:", lm_mse_test, "\n")
+cat("KNN Regression MSE on Test Data:", knn_mse_test, "\n")
+
+
 ```
 
 Your answer:
 
 ~~~
-Please write your answer in full sentences.
+Sorry, I fail to do this, the value looks strange.
 
 
 ~~~
@@ -149,18 +206,11 @@ mean(store)
 Comment on the results obtained.
 
 
-Your code:
-
-```{r,echo=TRUE}
-#
-#
-```
-
 Your answer:
 
 ~~~
-Please write your answer in full sentences.
 
+It indicates that 62.68% of bootstrap samples of size 100 drawn with replacement from the dataset of size 100, the 4th observation is included at least once
 
 ~~~
 
@@ -179,18 +229,11 @@ y <- x - 2 * x^2 + rnorm (100)
 In this data set, what is n and what is p? Write out the model
 used to generate the data in equation form.
 
-
-Your code:
-
-```{r,echo=TRUE}
-#
-#
-```
-
 Your answer:
 
 ~~~
-Please write your answer in full sentences.
+n is 100, p is 2. 
+$$Y = x - 2x^2 + e$$
 
 
 ~~~
@@ -202,14 +245,13 @@ Please write your answer in full sentences.
 Your code:
 
 ```{r,echo=TRUE}
-#
-#
+plot(x,y)
 ```
 
 Your answer:
 
 ~~~
-Please write your answer in full sentences.
+There is no linear relationship
 
 
 ~~~
@@ -228,14 +270,27 @@ to create a single data set containing both $X$ and $Y$ .
 Your code:
 
 ```{r,echo=TRUE}
-#
-#
+set.seed(1)
+x <- rnorm(100)
+y <- x - 2 * x^2 + rnorm(100)
+df <- data.frame(x, y)
+cv_errors <- numeric(4)
+
+
+for (degree in 1:4) {
+  model_formula <- as.formula(paste("y ~ poly(x, ", degree, ", raw = TRUE)"))
+  model_fit <- glm(model_formula, data = df)
+  cv_result <- cv.glm(df, model_fit)
+  cv_errors[degree] <- cv_result$delta[1]
+}
+
+cv_errors
 ```
 
 Your answer:
 
 ~~~
-Please write your answer in full sentences.
+the quadratic polynomial model perform the best since it has the lowest errors.
 
 
 ~~~
@@ -247,31 +302,38 @@ Are your results the same as what you got in (c)? Why?
 Your code:
 
 ```{r,echo=TRUE}
-#
-#
+set.seed(100)
+x <- rnorm(100)
+y <- x - 2 * x^2 + rnorm(100)
+df <- data.frame(x, y)
+cv_errors <- numeric(4)
+
+
+for (degree in 1:4) {
+  model_formula <- as.formula(paste("y ~ poly(x, ", degree, ", raw = TRUE)"))
+  model_fit <- glm(model_formula, data = df)
+  cv_result <- cv.glm(df, model_fit)
+  cv_errors[degree] <- cv_result$delta[1]
+}
+
+cv_errors
 ```
 
 Your answer:
 
 ~~~
-Please write your answer in full sentences.
+Same results, the quadratic polynomial model has the lowest error. This is because set.seed affect the generation of data X and random noise, but will not affect the generation of data's fundamental.
 
 
 ~~~
 
 (e) Which of the models in (c) had the smallest LOOCV error? Is this what you expected? Explain your answer.
 
-Your code:
-
-```{r,echo=TRUE}
-#
-#
-```
 
 Your answer:
 
 ~~~
-Please write your answer in full sentences.
+The second model has the smallest LOOCV error. Yes, because the graph kinds of look like quadratic form
 
 
 ~~~
@@ -283,14 +345,16 @@ Please write your answer in full sentences.
 Your code:
 
 ```{r,echo=TRUE}
-#
-#
+summary(glm(y~poly(x,degree=1,raw=TRUE)))
+summary(glm(y~poly(x,degree=2,raw=TRUE)))
+summary(glm(y~poly(x,degree=3,raw=TRUE)))
+summary(glm(y~poly(x,degree=4,raw=TRUE)))
 ```
 
 Your answer:
 
 ~~~
-Please write your answer in full sentences.
+In each model, degree 1 and 2 has small p-value, which means that it is significant. The results fits the cv results.
 
 
 ~~~
@@ -307,14 +371,26 @@ In Chapter 4, we used logistic regression to predict the probability of default 
 Your code:
 
 ```{r,echo=TRUE}
-#
-#
+set.seed(1)
+df <- Default
+
+trainIndex <- createDataPartition(df$default, p = .5, list = FALSE, times = 1)
+training_set_a <- df[trainIndex, ] 
+test_set_a <- df[-trainIndex, ]
+test_default_a <- test_set_a$default 
+
+fit_a <- glm(default ~ income + balance, data = training_set_a, family = binomial)
+
+probs_a <- predict(fit_a, test_set_a, type = "response")
+preds_a <- ifelse(probs_a > 0.5, "Yes", "No")
+
+table(Predicted = preds_a, Actual = test_default_a)
 ```
 
 Your answer:
 
 ~~~
-Please write your answer in full sentences.
+TN is 4817,FP is 16, TP is 40, FN is 126.
 
 
 ~~~
@@ -327,14 +403,18 @@ i. Split the sample set into a training set and a validation set.
 Your code:
 
 ```{r,echo=TRUE}
-#
-#
+set.seed(12)
+
+sample_data <- createDataPartition(df$default, p = .5, list = FALSE, times = 1)
+training_set_b <- df[sample_data, ] 
+test_set_b <- df[-sample_data, ]
+test_default_b <- test_set_b$default
 ```
 
 Your answer:
 
 ~~~
-Please write your answer in full sentences.
+The dataset is split into train and test data.
 
 
 ~~~
@@ -344,15 +424,15 @@ ii. Fit a multiple logistic regression model using only the training observation
 Your code:
 
 ```{r,echo=TRUE}
-#
-#
+fit_b <- glm(default ~ income+balance, data=training_set_b, family=binomial)
+
+summary(fit_b)
 ```
 
 Your answer:
 
 ~~~
-Please write your answer in full sentences.
-
+The model is shows above.The p-value are all very small
 
 ~~~
 
@@ -363,14 +443,15 @@ iii. Obtain a prediction of default status for each individual in the validation
 Your code:
 
 ```{r,echo=TRUE}
-#
-#
+probs_b = predict(fit_b,test_set_b, type="response")
+preds_b = rep("No", length(test_set_b$default)) 
+preds_b[probs_b>0.5] = "Yes"
 ```
 
 Your answer:
 
 ~~~
-Please write your answer in full sentences.
+The condition are write in the code
 
 
 ~~~
@@ -381,14 +462,13 @@ iv. Compute the validation set error, which is the fraction of the observations 
 Your code:
 
 ```{r,echo=TRUE}
-#
-#
+table(preds_b,test_default_b)
 ```
 
 Your answer:
 
 ~~~
-Please write your answer in full sentences.
+The model looks better than the previous model.
 
 
 ~~~
@@ -400,14 +480,60 @@ Please write your answer in full sentences.
 Your code:
 
 ```{r,echo=TRUE}
-#
-#
+#1
+set.seed(100)
+
+sample_data <- createDataPartition(df$default, p = .5, list = FALSE, times = 1)
+training_set_1 <- df[sample_data, ] 
+test_set_1 <- df[-sample_data, ]
+test_default_1 <- test_set_1$default
+
+fit_1 <- glm(default ~ income+balance, data=training_set_1, family=binomial)
+
+probs_1 = predict(fit_1,test_set_1, type="response")
+preds_1 = rep("No", length(test_set_1$default)) 
+preds_1[probs_1>0.5] = "Yes"
+
+table(preds_1,test_default_1)
+
+#2
+set.seed(1000)
+
+sample_data <- createDataPartition(df$default, p = .5, list = FALSE, times = 1)
+training_set_2 <- df[sample_data, ] 
+test_set_2 <- df[-sample_data, ]
+test_default_2 <- test_set_2$default
+
+fit_2 <- glm(default ~ income+balance, data=training_set_2, family=binomial)
+
+probs_2 = predict(fit_2,test_set_2, type="response")
+preds_2 = rep("No", length(test_set_2$default)) 
+preds_2[probs_1>0.5] = "Yes"
+
+table(preds_2,test_default_2)
+
+
+#3
+set.seed(10000)
+
+sample_data <- createDataPartition(df$default, p = .5, list = FALSE, times = 1)
+training_set_3 <- df[sample_data, ] 
+test_set_3 <- df[-sample_data, ]
+test_default_3 <- test_set_3$default
+
+fit_3 <- glm(default ~ income+balance, data=training_set_3, family=binomial)
+
+probs_3 = predict(fit_3,test_set_3, type="response")
+preds_3 = rep("No", length(test_set_3$default)) 
+preds_3[probs_1>0.5] = "Yes"
+
+table(preds_3,test_default_3)
 ```
 
 Your answer:
 
 ~~~
-Please write your answer in full sentences.
+The results have big difference in FP and TP.
 
 
 ~~~
@@ -419,14 +545,19 @@ Please write your answer in full sentences.
 Your code:
 
 ```{r,echo=TRUE}
-#
-#
+fit_d <- glm(default ~ income+balance+student, data=training_set_a, family=binomial)
+
+probs_d = predict(fit_d,test_set_a, type="response")
+preds_d = rep("No", length(test_set_a$default)) 
+preds_d[probs_1>0.5] = "Yes"
+
+table(preds_2,test_default_2)
 ```
 
 Your answer:
 
 ~~~
-Please write your answer in full sentences.
+The test error is $\frac {FP+FN} {Total} = \frac {68+164} {4999} = 4.64%$ Compare to the model in question a, the test error increase a lot.
 
 
 ~~~
@@ -441,14 +572,16 @@ We continue to consider the use of a logistic regression model to predict the pr
 Your code:
 
 ```{r,echo=TRUE}
-#
-#
+set.seed(1)
+
+fit2 = glm(default ~ income+balance, data=df, family=binomial)
+summary(fit2)$coefficients[2:3,2]
 ```
 
 Your answer:
 
 ~~~
-Please write your answer in full sentences.
+the coefficients of income and balance are very small.
 
 
 ~~~
@@ -459,14 +592,19 @@ Please write your answer in full sentences.
 Your code:
 
 ```{r,echo=TRUE}
-#
-#
+boot.fn = function(data, index){
+  default = data$default[index]
+  income = data$income[index]
+  balance = data$balance[index]
+  fit2 = glm(default ~ income + balance, family = binomial)
+  return(summary(fit2)$coefficients[2:3,2])
+}
 ```
 
 Your answer:
 
 ~~~
-Please write your answer in full sentences.
+The function is here.
 
 
 ~~~
@@ -477,14 +615,13 @@ Please write your answer in full sentences.
 Your code:
 
 ```{r,echo=TRUE}
-#
-#
+boot(df,boot.fn,100)
 ```
 
 Your answer:
 
 ~~~
-Please write your answer in full sentences.
+The estimated std. error for income and balance are small
 
 
 ~~~
@@ -495,7 +632,7 @@ Please write your answer in full sentences.
 Your answer:
 
 ~~~
-Please write your answer in full sentences.
+The estimated std. error for income and balance are very small
 
 
 ~~~
@@ -510,14 +647,14 @@ We will now consider the Boston housing data set, from the ISLR2 library.
 Your code:
 
 ```{r,echo=TRUE}
-#
-#
+hat_mu <- mean(Boston$medv)
+hat_mu
 ```
 
 Your answer:
 
 ~~~
-Please write your answer in full sentences.
+The mean of medv is 22.53281
 
 
 ~~~
@@ -529,14 +666,17 @@ Hint: We can compute the standard error of the sample mean by dividing the sampl
 Your code:
 
 ```{r,echo=TRUE}
-#
-#
+length <- length(Boston$medv)
+sd <- sqrt(sum((Boston$medv - hat_mu)^2)/(length-1))
+
+se = sd/sqrt(length)
+se
 ```
 
 Your answer:
 
 ~~~
-Please write your answer in full sentences.
+Under resampling, the sample mean of the median housing prices in Boston will deviate from the true population mean μ approximately 0.4088611 units
 
 
 ~~~
@@ -547,14 +687,20 @@ Please write your answer in full sentences.
 Your code:
 
 ```{r,echo=TRUE}
-#
-#
+set.seed(1)
+boot_fn2 = function(data, index){
+  X=data$medv[index]
+  hat_mu2 = mean(X)
+  return(hat_mu2)
+}
+
+boot(Boston,boot_fn2,1000)
 ```
 
 Your answer:
 
 ~~~
-Please write your answer in full sentences.
+Using boostrap, the std. error is 0.41, it is larger than the std.error in b, but almost same.
 
 
 ~~~
@@ -565,14 +711,15 @@ Hint: You can approximate a 95% confidence interval using the formula $[\hat{\mu
 Your code:
 
 ```{r,echo=TRUE}
-#
-#
+hat_mu-2*se
+hat_mu+2*se
+t.test(Boston$medv)
 ```
 
 Your answer:
 
 ~~~
-Please write your answer in full sentences.
+The confidence intervals from two methods are almost the same
 
 
 ~~~
@@ -583,14 +730,14 @@ Please write your answer in full sentences.
 Your code:
 
 ```{r,echo=TRUE}
-#
-#
+median_medv <- median(Boston$medv)
+median_medv
 ```
 
 Your answer:
 
 ~~~
-Please write your answer in full sentences.
+The median value of medv in the population is 21.2
 
 
 ~~~
@@ -601,14 +748,19 @@ Please write your answer in full sentences.
 Your code:
 
 ```{r,echo=TRUE}
-#
-#
+boot_fn3 = function(data, index){
+  X=data$medv[index]
+  Y = median(X)
+  return(Y)
+}
+
+boot(Boston,boot_fn3,1000)
 ```
 
 Your answer:
 
 ~~~
-Please write your answer in full sentences.
+The std.error is small, when compared to the median value(21.2), so this is good model
 
 
 ~~~
@@ -620,14 +772,14 @@ Please write your answer in full sentences.
 Your code:
 
 ```{r,echo=TRUE}
-#
-#
+percentile = quantile(Boston$medv, 0.1)
+percentile
 ```
 
 Your answer:
 
 ~~~
-Please write your answer in full sentences.
+The percentile is 12.75.
 
 
 ~~~
@@ -638,15 +790,19 @@ Please write your answer in full sentences.
 Your code:
 
 ```{r,echo=TRUE}
-#
-#
+boot_fn4 = function(data, index){
+  X=data$medv[index]
+  Y = quantile(X, 0.1)
+  return(Y)
+}
+
+boot(Boston,boot_fn4,1000)
 ```
 
 Your answer:
 
 ~~~
-Please write your answer in full sentences.
-
+The std.error is 0.5067, when compared to the 10th percentile value (12.75),is small, that's good
 
 ~~~
 
